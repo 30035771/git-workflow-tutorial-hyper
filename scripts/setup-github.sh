@@ -10,16 +10,22 @@
 #   - production Environment: 自分を必須レビュアーにし self-review を許可
 # ペアモードでは規約どおりの設定になる。
 #
-# 前提: gh CLI ログイン済み
+# 前提 (実行時に検証する): gh CLI ログイン済み
 #
 # 対象リポジトリは既定でこのスクリプトを含むリポジトリ。GH_REPO で上書きできる。
 # 非対話実行では確認プロンプトを省略する (SETUP_GITHUB_YES=1 でも省略可)。
 # -E: ERR trap を関数内にも継承させる (apply_ruleset の失敗を捕捉するため)
 set -Eeuo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+# shellcheck source=scripts/lib/preflight.sh
+source "${SCRIPT_DIR}/lib/preflight.sh"
 # gh repo view は cwd の git remote から対象を決めるため、呼び出し元の
 # ディレクトリに引きずられないようリポジトリルートへ移動する。
-cd "$(dirname "$0")/.."
+cd "${SCRIPT_DIR}/.."
+
+require_cmd gh
+require_gh_auth
 
 MODE="${1:?usage: setup-github.sh solo | pair <reviewer-login>}"
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
