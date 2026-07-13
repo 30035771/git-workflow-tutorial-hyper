@@ -95,7 +95,7 @@ if [[ -t 0 && "${SETUP_GITHUB_YES:-}" != "1" ]]; then
   [[ "${ANSWER}" == [yY] ]] || { echo "中止しました" >&2; exit 1; }
 fi
 
-echo "==> [1/3] マージ方式: squash merge のみ・タイトル=PRタイトル"
+echo "==> [1/4] マージ方式: squash merge のみ・タイトル=PRタイトル"
 gh api -X PATCH "repos/${REPO}" \
   -F allow_merge_commit=false \
   -F allow_rebase_merge=false \
@@ -104,7 +104,7 @@ gh api -X PATCH "repos/${REPO}" \
   -f squash_merge_commit_message=PR_BODY \
   -F delete_branch_on_merge=true > /dev/null
 
-echo "==> [2/3] Environments: dev / staging / production"
+echo "==> [2/4] Environments: dev / staging / production"
 gh api -X PUT "repos/${REPO}/environments/dev" > /dev/null
 gh api -X PUT "repos/${REPO}/environments/staging" > /dev/null
 # production のみ必須レビュアー承認を要求 (GA デプロイの承認ゲート)
@@ -116,7 +116,43 @@ gh api -X PUT "repos/${REPO}/environments/production" \
 }
 EOF
 
-echo "==> [3/3] Rulesets を適用"
+echo "==> [3/4] ラベル: PR タイトルのプレフィックスに対応するラベルを用意"
+
+# .github/workflows/pr-label.yml が PR タイトルのプレフィックスから付けるラベル。
+# 存在しないラベルは付けられないため、ここで先に作っておく。
+# ラベル名は pr-label.yml と .github/release.yml (ノートのカテゴリ定義) の
+# 3 か所で揃えること。
+#
+# 名前は Conventional Commits の type と 1:1 の "type: <type>"。GitHub 既定の
+# enhancement / bug は流用しない。名前が規約の type と一致していれば、
+# PR タイトル -> ラベル -> リリースノートのカテゴリが変換表なしで追える。
+#
+# "<name>|<color>|<description>" の形。--force で既存ラベルは色と説明を上書き
+# するため、何度実行しても同じ状態に収束する (冪等)。
+PREFIX_LABELS=(
+  "type: feat|a2eeef|新機能 (リリースノート: 🚀 Features)"
+  "type: fix|d73a4a|バグ修正 (リリースノート: 🐛 Bug Fixes)"
+  "type: docs|0075ca|ドキュメントのみの変更"
+  "type: refactor|c5def5|挙動を変えない内部改善"
+  "type: perf|fbca04|パフォーマンス改善"
+  "type: test|d4c5f9|テストの追加・修正"
+  "type: build|e4e669|ビルド設定・依存関係の変更"
+  "type: ci|bfd4f2|CI/CD の設定変更"
+  "type: chore|fef2c0|その他の雑務"
+  "type: revert|b60205|変更の巻き戻し"
+)
+
+for LABEL_SPEC in "${PREFIX_LABELS[@]}"; do
+  IFS='|' read -r LABEL_NAME LABEL_COLOR LABEL_DESC <<< "${LABEL_SPEC}"
+  gh label create "${LABEL_NAME}" \
+    --repo "${REPO}" \
+    --color "${LABEL_COLOR}" \
+    --description "${LABEL_DESC}" \
+    --force > /dev/null
+  echo "    ${LABEL_NAME}"
+done
+
+echo "==> [4/4] Rulesets を適用"
 
 # 適用対象。ここに無い tutorial-* は古い世代とみなし、適用後に削除する。
 RULESET_NAMES=(
